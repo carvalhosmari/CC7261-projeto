@@ -1,0 +1,77 @@
+#####################################
+# 🔧 Maven / Java
+#####################################
+
+target/
+*.log
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven wrapper
+.mvn/
+mvnw
+mvnw.cmd
+
+#####################################
+# 🐍 Python
+#####################################
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+*.egg-info/
+dist/
+build/
+
+#####################################
+# 🧬 gRPC / Protobuf gerados
+#####################################
+
+# Python gRPC generated files
+*_pb2.py
+*_pb2_grpc.py
+
+# Java generated sources (caso compile localmente)
+src/main/java/**/*.proto
+src/main/java/**/*.pb.java
+
+#####################################
+# 🐳 Docker
+#####################################
+
+docker-compose.override.yml
+*.env
+
+#####################################
+# 💻 IDEs
+#####################################
+
+# IntelliJ
+.idea/
+*.iml
+out/
+
+# VSCode
+.vscode/
+
+#####################################
+# 🖥 Sistema Operacional
+#####################################
+
+# Mac
+.DS_Store
+
+# Windows
+Thumbs.db
+
+#####################################
+# 🧪 Logs / Temporários
+#####################################
+
+*.tmp
+*.swp
+*.bak
