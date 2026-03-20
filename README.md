@@ -54,14 +54,6 @@ Processa as requisições recebidas e mantém o estado da aplicação (ex: canai
 
 ---
 
-### 🔄 Comunicação (ZeroMQ)
-
-Foi utilizado o **ZeroMQ** como middleware de comunicação por ser:
-
-* Leve e de alto desempenho
-* Sem necessidade de servidor central (broker implementado manualmente)
-* Suporte a múltiplos padrões de comunicação
-
 #### Padrão utilizado:
 
 * **REQ/REP** (Client ↔ Server via Broker)
