@@ -1,16 +1,32 @@
-services:
-  servidor:
-    build:
-      context: .
-      dockerfile: ./servidor/Dockerfile_servidor
-    container_name: servidor
-    ports:
-      - 50051:50051
+version: '3.8'
 
-  cliente:
+services:
+  broker:
     build:
       context: .
-      dockerfile: ./cliente/Dockerfile_cliente
-    container_name: cliente
+      dockerfile: broker/Dockerfile
+    ports:
+      - 5555:5555
+      - 5556:5556
+    command: ["python", "broker.py"]
+
+  server:
+    build:
+      context: .
+      dockerfile: server-python/Dockerfile
     depends_on:
-      - servidor
+      - broker
+    command: ["python", "server.py"]
+    volumes:
+      - ./data:/app/data
+
+  client:
+    build:
+      context: .
+      dockerfile: client-java/Dockerfile
+    depends_on:
+      - broker
+    command: ["java", "-jar", "target/client.jar"]
+    deploy:
+      replicas: 2
+
