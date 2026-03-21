@@ -19,6 +19,8 @@ services:
     command: ["python", "server.py"]
     volumes:
       - ./data:/app/data
+    deploy:
+      replicas: 1
 
   client:
     build:
@@ -28,5 +30,5 @@ services:
       - broker
     command: ["java", "-jar", "target/client.jar"]
     deploy:
-      replicas: 2
+      replicas: 1
 
