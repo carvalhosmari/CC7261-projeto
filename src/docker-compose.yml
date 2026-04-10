@@ -32,3 +32,11 @@ services:
     deploy:
       replicas: 1
 
+  pubsub-proxy:
+    build:
+      context: .
+      dockerfile: pub-sub/Dockerfile
+    ports:
+      - 5557:5557
+      - 5558:5558
+    command: ["python", "proxy.py"]
