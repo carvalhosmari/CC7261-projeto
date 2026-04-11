@@ -19,6 +19,7 @@ def init_data():
         with open(DATA_FILE, "w") as f:
             json.dump({
                 "logins": [],
+                "subscriptions": {},
                 "channels": [],
                 "messages": []
             }, f)
@@ -29,12 +30,12 @@ def read_data():
             content = f.read().strip()
 
             if not content:
-                return {"logins": [], "channels": [], "messages": []}
+                return {"logins": [],"subscriptions": {}, "channels": [], "messages": []}
 
             return json.loads(content)
 
     except Exception:
-        return {"logins": [], "channels": [], "messages": []}
+        return {"logins": [], "subscriptions": {}, "channels": [], "messages": []}
 
 def write_data(data):
     with open(DATA_FILE, "w") as f:
@@ -125,6 +126,7 @@ while True:
         # salva mensagem
         data["messages"].append({
             "channel": req.channel,
+            "username": req.username,
             "message": req.message,
             "timestamp": req.timestamp
         })
@@ -139,6 +141,24 @@ while True:
 
         res.message = "Mensagem publicada"
 
+    elif req.type == "SUBSCRIBE":
+        data = read_data()
+
+        user = req.username
+        channel = req.channel
+
+        if user not in data["subscriptions"]:
+            data["subscriptions"][user] = []
+
+        if channel not in data["subscriptions"][user]:
+            data["subscriptions"][user].append(channel)
+
+            write_data(data)
+
+            res.message = f"{user} inscrito em {channel}"
+        
+        else:
+            res.message = f"{user} já inscrito em {channel}"
     # ===============================
     # DEFAULT
     # ===============================

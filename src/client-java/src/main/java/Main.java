@@ -62,7 +62,7 @@ public class Main {
             // REGRA 2 — se inscrever em até 3 canais
             if (subscribedChannels.size() < 3 && !channels.isEmpty()) {
                 String randomChannel = channels.get(random.nextInt(channels.size()));
-                subscribe(sub, randomChannel);
+                subscribe(sub, randomChannel, bot);
             }
 
             // REGRA 3 — enviar mensagens
@@ -71,7 +71,7 @@ public class Main {
                 String channel = channels.get(random.nextInt(channels.size()));
 
                 for (int i = 0; i < 10; i++) {
-                    publish(channel, generateMessage());
+                    publish(channel, generateMessage(), bot);
 
                     try {
                         Thread.sleep(1000);
@@ -127,9 +127,10 @@ public class Main {
         return new ArrayList<>();
     }
 
-    private static void publish(String channel, String msg) {
+    private static void publish(String channel, String msg, String username) {
         Chat.ChatRequest req = Chat.ChatRequest.newBuilder()
                 .setType("PUBLISH")
+                .setUsername(username)
                 .setChannel(channel)
                 .setMessage(msg)
                 .setTimestamp(System.currentTimeMillis())
@@ -158,9 +159,23 @@ public class Main {
     //  SUBSCRIBE
     // ===============================
 
-    private static void subscribe(ZMQ.Socket sub, String channel) {
+    private static void subscribe(ZMQ.Socket sub, String channel, String username) {
+
         if (!subscribedChannels.contains(channel)) {
+
+            //SUB local (ZeroMQ)
             sub.subscribe(channel.getBytes());
+
+            // SUB remoto (servidor)
+            Chat.ChatRequest req = Chat.ChatRequest.newBuilder()
+                    .setType("SUBSCRIBE")
+                    .setUsername(username)
+                    .setChannel(channel)
+                    .setTimestamp(System.currentTimeMillis())
+                    .build();
+
+            send(req);
+
             subscribedChannels.add(channel);
 
             System.out.println("[CLIENT] Inscrito no canal: " + channel);
