@@ -1,87 +1,168 @@
 import zmq
 import chat_pb2
-import os
 import json
+import os
+
+# ===============================
+# CONFIG
+# ===============================
+
+DATA_FILE = "/app/data/data.json"
+
+# ===============================
+# PERSISTÊNCIA
+# ===============================
+
+def init_data():
+    if not os.path.exists(DATA_FILE):
+        os.makedirs(os.path.dirname(DATA_FILE), exist_ok=True)
+        with open(DATA_FILE, "w") as f:
+            json.dump({
+                "logins": [],
+                "subscriptions": {},
+                "channels": [],
+                "messages": []
+            }, f)
+
+def read_data():
+    try:
+        with open(DATA_FILE, "r") as f:
+            content = f.read().strip()
+
+            if not content:
+                return {"logins": [],"subscriptions": {}, "channels": [], "messages": []}
+
+            return json.loads(content)
+
+    except Exception:
+        return {"logins": [], "subscriptions": {}, "channels": [], "messages": []}
+
+def write_data(data):
+    with open(DATA_FILE, "w") as f:
+        json.dump(data, f, indent=2)
+
+# ===============================
+# ZEROMQ SETUP
+# ===============================
 
 context = zmq.Context()
-socket = context.socket(zmq.REP)
 
+# Worker (REQ/REP via broker)
+socket = context.socket(zmq.REP)
 socket.connect("tcp://broker:5556")
+
+# Publisher (Pub/Sub)
+pub_socket = context.socket(zmq.PUB)
+pub_socket.connect("tcp://pubsub-proxy:5557")
 
 print("Worker conectado ao broker", flush=True)
 
-DATA_DIR = "/app/data" 
-DATA_FILE = os.path.join(DATA_DIR, "data.json")
+# ===============================
+# INIT
+# ===============================
 
-os.makedirs(DATA_DIR, exist_ok=True) 
-
-def init_data(): 
-    if not os.path.exists(DATA_FILE): 
-        with open(DATA_FILE, "w") as f: 
-            json.dump({ "logins": [], "channels": [] }, f) 
-
-
-def read_data():
-    # Se não existe, cria
-    if not os.path.exists(DATA_FILE):
-        return {"logins": [], "channels": []}
-
-    # Se existe mas está vazio
-    if os.path.getsize(DATA_FILE) == 0:
-        data = {"logins": [], "channels": []}
-        write_data(data)
-        return data
-
-    # Tenta ler normalmente
-    try:
-        with open(DATA_FILE, "r") as f:
-            return json.load(f)
-    except Exception as e:
-        data = {"logins": [], "channels": []}
-        write_data(data)
-        return data
- 
-
-def write_data(data): 
-    with open(DATA_FILE, "w") as f: 
-        json.dump(data, f, indent=2) 
-        
-# Inicializa arquivo 
 init_data()
 
-data = read_data() 
-channels = set(data.get("channels", []))
+# ===============================
+# LOOP PRINCIPAL
+# ===============================
 
 while True:
-    try:   
-        message = socket.recv()
 
-        req = chat_pb2.ChatRequest()
-        req.ParseFromString(message)
+    message = socket.recv()
 
-        print(f"[SERVER] Recebendo: {req.type}", flush=True)
+    req = chat_pb2.ChatRequest()
+    req.ParseFromString(message)
 
-        res = chat_pb2.ChatResponse()
+    print(f"[SERVER] Recebendo: {req.type}", flush=True)
 
-        if req.type == "LOGIN":
-            data = read_data()
-            data["logins"].append({ "username": req.username, "timestamp": req.timestamp })
+    res = chat_pb2.ChatResponse()
+
+    # ===============================
+    # LOGIN
+    # ===============================
+    if req.type == "LOGIN":
+        data = read_data()
+
+        data["logins"].append({
+            "username": req.username,
+            "timestamp": req.timestamp
+        })
+
+        write_data(data)
+
+        res.message = f"Login OK: {req.username}"
+
+    # ===============================
+    # LIST CHANNELS
+    # ===============================
+    elif req.type == "LIST_CHANNELS":
+        data = read_data()
+
+        res.message = "Lista de canais"
+        res.channels.extend(data["channels"])
+
+    # ===============================
+    # CREATE CHANNEL
+    # ===============================
+    elif req.type == "CREATE_CHANNEL":
+        data = read_data()
+
+        if req.channel not in data["channels"]:
+            data["channels"].append(req.channel)
             write_data(data)
-            res.message = f"Login OK: {req.username}"
-
-        elif req.type == "LIST_CHANNELS":
-            data = read_data()
-            res.message = "Lista de canais"
-            res.channels.extend(list(channels))
-
-        elif req.type == "CREATE_CHANNEL":
-            channels.add(req.channel)
-            data = read_data() 
-            data["channels"].append(req.channel) 
-            write_data(data)
-
             res.message = f"Canal criado: {req.channel}"
+        else:
+            res.message = f"Canal já existe: {req.channel}"
 
-        socket.send(res.SerializeToString())
-    except Exception as e: 
-        print(f"🔥 ERRO NO LOOP: {e}", flush=True)
+    # ===============================
+    # PUBLISH
+    # ===============================
+    elif req.type == "PUBLISH":
+        print(f"Publicando em {req.channel}", flush=True)
+
+        data = read_data()
+
+        # salva mensagem
+        data["messages"].append({
+            "channel": req.channel,
+            "username": req.username,
+            "message": req.message,
+            "timestamp": req.timestamp
+        })
+
+        write_data(data)
+
+        # envia via Pub/Sub
+        pub_socket.send_multipart([
+            req.channel.encode(),
+            req.SerializeToString()
+        ])
+
+        res.message = "Mensagem publicada"
+
+    elif req.type == "SUBSCRIBE":
+        data = read_data()
+
+        user = req.username
+        channel = req.channel
+
+        if user not in data["subscriptions"]:
+            data["subscriptions"][user] = []
+
+        if channel not in data["subscriptions"][user]:
+            data["subscriptions"][user].append(channel)
+
+            write_data(data)
+
+            res.message = f"{user} inscrito em {channel}"
+        
+        else:
+            res.message = f"{user} já inscrito em {channel}"
+    # ===============================
+    # DEFAULT
+    # ===============================
+    else:
+        res.message = "Tipo inválido"
+
+    socket.send(res.SerializeToString())

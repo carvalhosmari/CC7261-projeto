@@ -1,16 +1,30 @@
 {
   "logins": [
     {
-      "username": "bot_in",
-      "timestamp": 1773968492362
-    },
-    {
-      "username": "bot_esse",
-      "timestamp": 1773968492605
+      "username": "bot_quod",
+      "timestamp": 1775872400273
     }
   ],
+  "subscriptions": {
+    "bot_quod": [
+      "canal_41"
+    ]
+  },
   "channels": [
-    "officia",
-    "corporis"
+    "canal_41"
+  ],
+  "messages": [
+    {
+      "channel": "canal_41",
+      "username": "bot_quod",
+      "message": " placeat tempora id consequatur delectus ab impedit quaerat ipsam cumque a quod nam ut dolorem corporis sequi qui dolor laudantium et optio veritatis autem ut perferendis",
+      "timestamp": 1775872400389
+    },
+    {
+      "channel": "canal_41",
+      "username": "bot_quod",
+      "message": " corporis eaque ipsam consequatur et illum consequatur suscipit aperiam et est ut doloribus veniam vitae ut deserunt occaecati nisi fugit voluptatum tempora laudantium nulla nihil iusto error repellat rerum dolorem",
+      "timestamp": 1775872401424
+    }
   ]
 }

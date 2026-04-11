@@ -2,172 +2,217 @@
 
 ## 📌 Introdução
 
-Este projeto implementa um sistema de troca de mensagens inspirado em arquiteturas modernas de sistemas distribuídos. A aplicação simula um ambiente de comunicação entre clientes e servidores utilizando um **broker intermediário**, permitindo desacoplamento, escalabilidade e flexibilidade na comunicação.
+Este projeto consiste na implementação de um sistema distribuído para troca de mensagens instantâneas, inspirado em sistemas clássicos como BBS (Bulletin Board System) e IRC (Internet Relay Chat).
 
-A arquitetura geral do sistema segue o modelo:
+A aplicação permite que múltiplos clientes (bots) interajam com servidores para:
 
-```
-Client → Broker → Server (Worker)
-```
+* realizar login
+* criar e listar canais
+* publicar mensagens
+* se inscrever em canais
+* receber mensagens em tempo real
 
-Onde:
-
-* **Client** envia requisições (login, criação de canais, etc.)
-* **Broker** atua como intermediário e roteador de mensagens
-* **Server (Worker)** processa as requisições e mantém o estado da aplicação
+O sistema foi projetado seguindo princípios de **Sistemas Distribuídos**, com foco em comunicação desacoplada, escalabilidade e persistência de dados.
 
 ---
 
 ## 🏗️ Arquitetura do Sistema
 
-O sistema é composto por três componentes principais:
+O sistema é composto pelos seguintes componentes:
 
-### 🔹 Client (Java)
+### 🔹 Cliente (Java)
 
-Responsável por enviar requisições ao sistema.
+* Responsável por simular usuários (bots)
+* Envia requisições (REQ) ao servidor
+* Se inscreve em canais via Pub/Sub
+* Publica mensagens e escuta eventos em tempo real
 
-### 🔹 Broker (Python + ZeroMQ)
+### 🔹 Servidor (Python)
 
-Atua como intermediário entre clientes e servidores, utilizando o padrão **ROUTER/DEALER** para encaminhamento de mensagens.
+* Processa requisições dos clientes
+* Gerencia usuários, canais e mensagens
+* Realiza persistência em disco (JSON)
+* Publica mensagens para o sistema Pub/Sub
 
-### 🔹 Server / Worker (Python)
+### 🔹 Broker (ZeroMQ)
 
-Processa as requisições recebidas e mantém o estado da aplicação (ex: canais criados).
-
----
-
-## ⚙️ Tecnologias e Escolhas de Projeto
-
-### 💻 Linguagens
-
-* **Java (Client)**
-
-  * Escolhida para simular um cliente tipicamente usado em aplicações reais.
-  * Forte tipagem e integração com Protobuf.
-  * Uso de Maven para gerenciamento de dependências.
-
-* **Python (Server e Broker)**
-
-  * Simplicidade e rapidez no desenvolvimento.
-  * Excelente suporte para ZeroMQ e Protobuf.
-  * Ideal para prototipação de sistemas distribuídos.
-
----
-
-#### Padrão utilizado:
-
-* **REQ/REP** (Client ↔ Server via Broker)
-* **ROUTER/DEALER** (no Broker)
-
-Esse modelo permite:
-
-* Desacoplamento entre cliente e servidor
-* Possibilidade de múltiplos servidores (load balancing)
-* Facilidade de evolução para outros padrões (ex: PUB/SUB)
-
----
-
-### 📦 Serialização (Protocol Buffers)
-
-Foi utilizado **Protocol Buffers (Protobuf)** para serialização de mensagens.
-
-#### Motivações:
-
-* Alto desempenho (binário e compacto)
-* Forte tipagem
-* Compatível com múltiplas linguagens (Java + Python)
-* Facilita evolução do contrato (schema evolution)
-
-#### Estrutura das mensagens:
-
-* `ChatRequest` → enviado pelo cliente
-* `ChatResponse` → retornado pelo servidor
-
----
-
-### 📦 Persistência
-
-Atualmente, o sistema utiliza **armazenamento em disco** no servidor:
-
-#### 📂 Implementação
-
-Cada servidor mantém seu próprio arquivo:
+* Intermedia comunicação síncrona (REQ/REP)
+* Implementa padrão **Load Balancing Broker**
 
 ```
-/app/data/data.json
+Cliente → Broker → Servidor
 ```
 
-Com Docker:
+### 🔹 Pub/Sub Proxy (ZeroMQ)
+
+* Responsável pela distribuição de mensagens em tempo real
+* Implementa padrão **Publisher-Subscriber**
 
 ```
-./data → /app/data
+Servidor → Proxy → Clientes
 ```
 
 ---
 
-##### 📌 Estrutura do arquivo
+## 🔄 Comunicação
+
+### 📡 REQ/REP (Síncrono)
+
+Utilizado para operações de controle:
+
+* LOGIN
+* CREATE_CHANNEL
+* LIST_CHANNELS
+* SUBSCRIBE
+* PUBLISH
+
+### 📡 PUB/SUB (Assíncrono)
+
+Utilizado para distribuição de mensagens:
+
+* cada canal = um tópico
+* clientes recebem mensagens dos canais inscritos
+
+---
+
+## 📦 Serialização
+
+O sistema utiliza **Protocol Buffers (Protobuf)** para serialização binária das mensagens.
+
+### 📄 Estrutura principal:
+
+```proto
+message ChatRequest {
+  string type = 1;
+  string username = 2;
+  string channel = 3;
+  string message = 4;
+  int64 timestamp = 5;
+}
+
+message ChatResponse {
+  string message = 1;
+  repeated string channels = 2;
+}
+```
+
+### ✔ Vantagens
+
+* alta performance
+* baixo uso de banda
+* compatível entre linguagens (Java ↔ Python)
+
+---
+
+## 💾 Persistência de Dados
+
+O servidor mantém persistência em arquivo JSON:
+
+📂 `/app/data/data.json`
+
+### 📄 Estrutura:
 
 ```json
 {
   "logins": [
     {
-      "username": "bot1",
-      "timestamp": 1710880000000
+      "username": "bot_quod",
+      "timestamp": 1775872400273
     }
   ],
+  "subscriptions": {
+    "bot_quod": [
+      "canal_41"
+    ]
+  },
   "channels": [
-    "geral"
+    "canal_41"
+  ],
+  "messages": [
+    {
+      "channel": "canal_41",
+      "username": "bot_quod",
+      "message": " placeat tempora id consequatur delectus ab impedit quaerat ipsam cumque a quod nam ut dolorem corporis sequi qui dolor laudantium et optio veritatis autem ut perferendis",
+      "timestamp": 1775872400389
+    },
+    {
+      "channel": "canal_41",
+      "username": "bot_quod",
+      "message": " corporis eaque ipsam consequatur et illum consequatur suscipit aperiam et est ut doloribus veniam vitae ut deserunt occaecati nisi fugit voluptatum tempora laudantium nulla nihil iusto error repellat rerum dolorem",
+      "timestamp": 1775872401424
+    }
   ]
 }
 ```
 
----
+### ✔ Dados armazenados
 
-#### 🧠 Dados Persistidos
+* logins realizados
+* canais criados
+* inscrições dos usuários
+* mensagens publicadas
 
-O sistema armazena:
+## 🐳 Containers (Docker)
 
-* ✔ Histórico de logins (usuário + timestamp)
-* ✔ Lista de canais criados
+O sistema é orquestrado com Docker Compose:
 
----
+### 📄 Serviços
 
-## 🐳 Containerização
+* `client` → cliente Java
+* `server` → servidor Python
+* `broker` → REQ/REP
+* `pubsub-proxy` → PUB/SUB
 
-O projeto utiliza **Docker e Docker Compose** para orquestração dos serviços.
+### 📄 Portas
 
-### Benefícios:
-
-* Ambiente padronizado
-* Facilidade de execução
-* Isolamento dos serviços
-
----
-
-## 🚀 Funcionalidades atuais
-
-* Login de usuário
-* Criação de canais
-* Listagem de canais
-* Comunicação cliente-servidor via broker
+| Serviço      | Porta |
+| ------------ | ----- |
+| Broker Front | 5555  |
+| Broker Back  | 5556  |
+| XSUB         | 5557  |
+| XPUB         | 5558  |
 
 ---
 
-## 🔮 Próximos passos
+## 🤖 Comportamento do Cliente (Bot)
 
-* Envio de mensagens entre usuários
+Cada cliente executa automaticamente:
+
+1. Realiza login
+2. Cria canais até atingir 5 canais
+3. Se inscreve em até 3 canais
+4. Entra em loop infinito:
+
+   * escolhe um canal aleatório
+   * envia 10 mensagens (1s intervalo)
+   * escuta mensagens dos canais inscritos
+
+---
+
+## 🔁 Fluxo de Mensagens
+
+### 📌 Publicação
+
+```
+Cliente → Broker → Servidor → PubSub Proxy → Clientes inscritos
+```
+
+### 📌 Recebimento
+
+* cliente recebe:
+
+  * canal
+  * usuário
+  * mensagem
+  * timestamp de envio
+  * timestamp de recebimento
+
+
 
 ---
 
-## 🧩 Conclusão
+## ✅ Conclusão
 
-Este projeto demonstra, de forma prática, conceitos fundamentais de sistemas distribuídos:
+O sistema implementado representa uma versão simplificada, porém funcional, de uma plataforma de mensagens distribuída, incorporando conceitos fundamentais de sistemas modernos como desacoplamento, comunicação assíncrona e persistência de estado.
 
-* Comunicação desacoplada
-* Uso de brokers
-* Serialização eficiente
-* Arquitetura escalável
-
-Apesar de simplificado, ele representa uma base sólida para sistemas reais de mensageria.
-
----
+O projeto demonstra na prática como arquiteturas distribuídas podem ser construídas utilizando ferramentas leves como ZeroMQ, Docker e Protobuf.
