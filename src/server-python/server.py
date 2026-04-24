@@ -2,6 +2,7 @@ import zmq
 import chat_pb2
 import json
 import os
+from datetime import datetime, timezone, timedelta
 
 # ===============================
 # CONFIG
@@ -41,6 +42,15 @@ def write_data(data):
     with open(DATA_FILE, "w") as f:
         json.dump(data, f, indent=2)
 
+def get_timestamp(millis):
+    dt = datetime.fromtimestamp(millis/1000)
+
+    dt = dt - timedelta(hours=3)
+
+    return str(dt)
+
+count = 0
+
 # ===============================
 # ZEROMQ SETUP
 # ===============================
@@ -77,6 +87,7 @@ while True:
     print(f"[SERVER] Recebendo: {req.type}", flush=True)
 
     res = chat_pb2.ChatResponse()
+    dt = get_timestamp(req.timestamp)
 
     # ===============================
     # LOGIN
@@ -86,7 +97,7 @@ while True:
 
         data["logins"].append({
             "username": req.username,
-            "timestamp": req.timestamp
+            "timestamp": dt
         })
 
         write_data(data)
@@ -123,12 +134,16 @@ while True:
 
         data = read_data()
 
+        if req.count > count:
+            count = req.count
+
         # salva mensagem
         data["messages"].append({
             "channel": req.channel,
             "username": req.username,
             "message": req.message,
-            "timestamp": req.timestamp
+            "timestamp": dt,
+            "count": count
         })
 
         write_data(data)
