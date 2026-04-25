@@ -20,7 +20,7 @@ services:
     volumes:
       - ./data:/app/data
     deploy:
-      replicas: 1
+      replicas: 2
 
   client:
     build:
@@ -40,3 +40,12 @@ services:
       - 5557:5557
       - 5558:5558
     command: ["python", "proxy.py"]
+
+  heartbeat:
+    build:
+      context: .
+      dockerfile: heartbeat/Dockerfile
+    ports:
+      - 6666:6666
+      - 6667:6667
+    command: ["python", "heartbeat.py"]
