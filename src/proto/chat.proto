@@ -8,9 +8,27 @@ message ChatRequest {
   string channel = 3;
   string message = 4;
   int64 timestamp = 5;
+  int32 count = 6;
 }
 
 message ChatResponse {
   string message = 1;
   repeated string channels = 2;
+}
+
+message HBRequest {
+  string type = 1;
+  string server = 2;
+}
+
+message HBResponse {
+  string message = 1;
+  int32 rank = 2;
+  repeated ServerInfo servers = 3;
+  int64 timestamp = 4;
+}
+
+message ServerInfo {
+  string server = 1;
+  int32 rank = 2;
 }

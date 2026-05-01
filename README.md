@@ -1,38 +1,54 @@
 # CC7261-projeto - Sistema para troca de mensagem instantânea 📨
 
+
+
 ## 📌 Introdução
 
 Este projeto consiste na implementação de um sistema distribuído para troca de mensagens instantâneas, inspirado em sistemas clássicos como BBS (Bulletin Board System) e IRC (Internet Relay Chat).
 
 A aplicação permite que múltiplos clientes (bots) interajam com servidores para:
 
-* realizar login
-* criar e listar canais
-* publicar mensagens
-* se inscrever em canais
-* receber mensagens em tempo real
+- realizar login
+- criar e listar canais
+- publicar mensagens
+- se inscrever em canais
+- receber mensagens em tempo real
 
-O sistema foi projetado seguindo princípios de **Sistemas Distribuídos**, com foco em comunicação desacoplada, escalabilidade e persistência de dados.
+O sistema evoluiu para incluir **coordenação entre múltiplos servidores**, utilizando um serviço de heartbeat responsável por descoberta de servidores e sincronização de tempo.
 
----
+
 
 ## 🏗️ Arquitetura do Sistema
 
 O sistema é composto pelos seguintes componentes:
 
+
+
 ### 🔹 Cliente (Java)
 
-* Responsável por simular usuários (bots)
-* Envia requisições (REQ) ao servidor
-* Se inscreve em canais via Pub/Sub
-* Publica mensagens e escuta eventos em tempo real
+- Simula usuários (bots)
+- Envia requisições (REQ) ao servidor
+- Se inscreve em canais via Pub/Sub
+- Publica mensagens e escuta eventos em tempo real
+
+
 
 ### 🔹 Servidor (Python)
 
-* Processa requisições dos clientes
-* Gerencia usuários, canais e mensagens
-* Realiza persistência em disco (JSON)
-* Publica mensagens para o sistema Pub/Sub
+- Processa requisições dos clientes
+- Gerencia:
+  - usuários
+  - canais
+  - mensagens
+  - inscrições
+- Realiza persistência em JSON
+- Publica mensagens via Pub/Sub
+- Consulta o heartbeat para:
+  - obter seu rank
+  - sincronizar relógio
+  - descobrir outros servidores
+
+
 
 ### 🔹 Broker (ZeroMQ)
 
@@ -43,6 +59,8 @@ O sistema é composto pelos seguintes componentes:
 Cliente → Broker → Servidor
 ```
 
+
+
 ### 🔹 Pub/Sub Proxy (ZeroMQ)
 
 * Responsável pela distribuição de mensagens em tempo real
@@ -52,19 +70,54 @@ Cliente → Broker → Servidor
 Servidor → Proxy → Clientes
 ```
 
+
+
+### 🔹 Heartbeat (Python)
+
+Serviço responsável pela **coordenação do sistema distribuído**.
+
+Funções:
+
+- atribuir rank único aos servidores
+- manter lista de servidores ativos
+- fornecer lista de servidores
+- atuar como **fonte de tempo (clock de referência)**
+
+```
+Servidor → Heartbeat → (rank + lista + tempo)
+```
+
+
+
 ---
+
+
 
 ## 🔄 Comunicação
 
+
+
 ### 📡 REQ/REP (Síncrono)
 
-Utilizado para operações de controle:
+Utilizado para:
 
-* LOGIN
-* CREATE_CHANNEL
-* LIST_CHANNELS
-* SUBSCRIBE
-* PUBLISH
+- LOGIN
+
+- CREATE_CHANNEL
+
+- LIST_CHANNELS
+
+- SUBSCRIBE
+
+- PUBLISH
+
+- REGISTER (heartbeat)
+
+- GET_SERVERS (heartbeat)
+
+- SYNC (heartbeat)
+
+  
 
 ### 📡 PUB/SUB (Assíncrono)
 
@@ -75,9 +128,13 @@ Utilizado para distribuição de mensagens:
 
 ---
 
+
+
 ## 📦 Serialização
 
 O sistema utiliza **Protocol Buffers (Protobuf)** para serialização binária das mensagens.
+
+
 
 ### 📄 Estrutura principal:
 
@@ -94,7 +151,26 @@ message ChatResponse {
   string message = 1;
   repeated string channels = 2;
 }
+
+message HBRequest {
+  string type = 1;
+  string server = 2;
+}
+
+message HBResponse {
+  string message = 1;
+  int32 rank = 2;
+  repeated ServerInfo servers = 3;
+  int64 timestamp = 4;
+}
+
+message ServerInfo {
+  string server = 1;
+  int32 rank = 2;
+}
 ```
+
+
 
 ### ✔ Vantagens
 
@@ -102,7 +178,11 @@ message ChatResponse {
 * baixo uso de banda
 * compatível entre linguagens (Java ↔ Python)
 
+
+
 ---
+
+
 
 ## 💾 Persistência de Dados
 
@@ -145,6 +225,8 @@ O servidor mantém persistência em arquivo JSON:
 }
 ```
 
+
+
 ### ✔ Dados armazenados
 
 * logins realizados
@@ -152,9 +234,35 @@ O servidor mantém persistência em arquivo JSON:
 * inscrições dos usuários
 * mensagens publicadas
 
+
+
+## ❤️ Heartbeat (Coordenação)
+
+### 🔹 Registro de servidor
+
+```
+REGISTER → recebe rank
+```
+
+### 🔹 Descoberta
+
+```
+GET_SERVERS → lista de servidores
+```
+
+### 🔹 Tempo
+
+```
+SYNC → timestamp global
+```
+
+
+
 ## 🐳 Containers (Docker)
 
 O sistema é orquestrado com Docker Compose:
+
+
 
 ### 📄 Serviços
 
@@ -162,6 +270,8 @@ O sistema é orquestrado com Docker Compose:
 * `server` → servidor Python
 * `broker` → REQ/REP
 * `pubsub-proxy` → PUB/SUB
+
+
 
 ### 📄 Portas
 
@@ -171,8 +281,13 @@ O sistema é orquestrado com Docker Compose:
 | Broker Back  | 5556  |
 | XSUB         | 5557  |
 | XPUB         | 5558  |
+| Heartbeat    | 6667  |
+
+
 
 ---
+
+
 
 ## 🤖 Comportamento do Cliente (Bot)
 

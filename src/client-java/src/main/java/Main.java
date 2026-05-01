@@ -8,6 +8,7 @@ public class Main {
     private static ZMQ.Socket socket;
     private static Set<String> subscribedChannels = new HashSet<>();
     private static Random random = new Random();
+    public static int count = 0;
 
     public static void main(String[] args) {
 
@@ -71,7 +72,9 @@ public class Main {
                 String channel = channels.get(random.nextInt(channels.size()));
 
                 for (int i = 0; i < 10; i++) {
-                    publish(channel, generateMessage(), bot);
+                    count += 1;
+                    
+                    publish(channel, generateMessage(), bot, count);
 
                     try {
                         Thread.sleep(1000);
@@ -127,15 +130,16 @@ public class Main {
         return new ArrayList<>();
     }
 
-    private static void publish(String channel, String msg, String username) {
+    private static void publish(String channel, String msg, String username, int count) {
         Chat.ChatRequest req = Chat.ChatRequest.newBuilder()
                 .setType("PUBLISH")
                 .setUsername(username)
                 .setChannel(channel)
                 .setMessage(msg)
                 .setTimestamp(System.currentTimeMillis())
+                .setCount(count)
                 .build();
-
+        
         send(req);
     }
 
