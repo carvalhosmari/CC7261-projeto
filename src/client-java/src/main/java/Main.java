@@ -1,14 +1,25 @@
 import org.zeromq.ZMQ;
 import chat.Chat;
 import com.github.javafaker.Faker;
+
 import java.util.*;
 
 public class Main {
 
+    // ===============================
+    // STATE
+    // ===============================
+
     private static ZMQ.Socket socket;
-    private static Set<String> subscribedChannels = new HashSet<>();
-    private static Random random = new Random();
-    public static int count = 0;
+    private static final Set<String> subscribedChannels = new HashSet<>();
+    private static final Random random = new Random();
+    private static final Faker faker = new Faker();
+
+    private static int logicalClock = 0;
+
+    // ===============================
+    // MAIN
+    // ===============================
 
     public static void main(String[] args) {
 
@@ -26,27 +37,7 @@ public class Main {
 
         login(bot);
 
-        // THREAD DE ESCUTA (Pub/Sub)
-        new Thread(() -> {
-            while (true) {
-                try {
-                    byte[] topic = sub.recv();
-                    byte[] msg = sub.recv();
-
-                    Chat.ChatRequest req = Chat.ChatRequest.parseFrom(msg);
-
-                    long receiveTime = System.currentTimeMillis();
-
-                    System.out.println("\n[CANAL: " + req.getChannel() + "]");
-                    System.out.println("Mensagem: " + req.getMessage());
-                    System.out.println("Enviado em: " + req.getTimestamp());
-                    System.out.println("Recebido em: " + receiveTime);
-
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-        }).start();
+        startSubscriberThread(sub);
 
         // LOOP PRINCIPAL
         while (true) {
@@ -72,18 +63,40 @@ public class Main {
                 String channel = channels.get(random.nextInt(channels.size()));
 
                 for (int i = 0; i < 10; i++) {
-                    count += 1;
-                    
-                    publish(channel, generateMessage(), bot, count);
 
-                    try {
-                        Thread.sleep(1000);
-                    } catch (InterruptedException e) {
-                        e.printStackTrace();
-                    }
+                    incrementClock(); // Lamport BEFORE send
+
+                    publish(channel, generateMessage(), bot);
+
+                    sleep(1000);
                 }
             }
         }
+    }
+
+    // ===============================
+    // SUBSCRIBER THREAD
+    // ===============================
+
+    private static void startSubscriberThread(ZMQ.Socket sub) {
+
+        new Thread(() -> {
+            while (true) {
+                try {
+                    byte[] topic = sub.recv();
+                    byte[] msg = sub.recv();
+
+                    Chat.ChatRequest req = Chat.ChatRequest.parseFrom(msg);
+
+                    // Lamport update on receive
+                    updateClock(req.getCount());
+
+                    long receiveTime = System.currentTimeMillis();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
     }
 
     // ===============================
@@ -91,30 +104,24 @@ public class Main {
     // ===============================
 
     private static void login(String username) {
-        Chat.ChatRequest req = Chat.ChatRequest.newBuilder()
-                .setType("LOGIN")
+        send(buildBaseRequest("LOGIN")
                 .setUsername(username)
+                .setCount(logicalClock)
                 .setTimestamp(System.currentTimeMillis())
-                .build();
-
-        send(req);
+                .build());
     }
 
     private static void createChannel(String channel) {
-        Chat.ChatRequest req = Chat.ChatRequest.newBuilder()
-                .setType("CREATE_CHANNEL")
+        send(buildBaseRequest("CREATE_CHANNEL")
                 .setChannel(channel)
+                .setCount(logicalClock)
                 .setTimestamp(System.currentTimeMillis())
-                .build();
-
-        send(req);
+                .build());
     }
 
     private static List<String> listChannels() {
-        Chat.ChatRequest req = Chat.ChatRequest.newBuilder()
-                .setType("LIST_CHANNELS")
-                .setTimestamp(System.currentTimeMillis())
-                .build();
+
+        Chat.ChatRequest req = buildBaseRequest("LIST_CHANNELS").build();
 
         socket.send(req.toByteArray());
 
@@ -122,7 +129,11 @@ public class Main {
 
         try {
             Chat.ChatResponse res = Chat.ChatResponse.parseFrom(reply);
+
+            updateClock(res.getCount()); // Lamport on receive
+
             return res.getChannelsList();
+
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -130,21 +141,22 @@ public class Main {
         return new ArrayList<>();
     }
 
-    private static void publish(String channel, String msg, String username, int count) {
-        Chat.ChatRequest req = Chat.ChatRequest.newBuilder()
-                .setType("PUBLISH")
+    private static void publish(String channel, String msg, String username) {
+
+        Chat.ChatRequest req = buildBaseRequest("PUBLISH")
                 .setUsername(username)
                 .setChannel(channel)
                 .setMessage(msg)
+                .setCount(logicalClock)
                 .setTimestamp(System.currentTimeMillis())
-                .setCount(count)
                 .build();
-        
+
         send(req);
     }
 
     private static void send(Chat.ChatRequest req) {
-        System.out.println("[CLIENT] Enviando: " + req.getType());
+
+        System.out.println("[CLIENT] Enviando: " + req.getType() + " | clock=" + logicalClock);
 
         socket.send(req.toByteArray());
 
@@ -152,7 +164,10 @@ public class Main {
 
         try {
             Chat.ChatResponse res = Chat.ChatResponse.parseFrom(reply);
-            System.out.println("[CLIENT] Resposta: " + res.getMessage());
+
+            updateClock(res.getCount()); // Lamport on receive
+
+            System.out.println("[CLIENT] Resposta: " + res.getMessage() + " | clock=" + logicalClock);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -160,30 +175,48 @@ public class Main {
     }
 
     // ===============================
-    //  SUBSCRIBE
+    // SUBSCRIBE
     // ===============================
 
     private static void subscribe(ZMQ.Socket sub, String channel, String username) {
 
-        if (!subscribedChannels.contains(channel)) {
-
-            //SUB local (ZeroMQ)
-            sub.subscribe(channel.getBytes());
-
-            // SUB remoto (servidor)
-            Chat.ChatRequest req = Chat.ChatRequest.newBuilder()
-                    .setType("SUBSCRIBE")
-                    .setUsername(username)
-                    .setChannel(channel)
-                    .setTimestamp(System.currentTimeMillis())
-                    .build();
-
-            send(req);
-
-            subscribedChannels.add(channel);
-
-            System.out.println("[CLIENT] Inscrito no canal: " + channel);
+        if (subscribedChannels.contains(channel)) {
+            return;
         }
+
+        // SUB local
+        sub.subscribe(channel.getBytes());
+
+        // SUB remoto
+        send(buildBaseRequest("SUBSCRIBE")
+                .setUsername(username)
+                .setChannel(channel)
+                .setCount(logicalClock)
+                .setTimestamp(System.currentTimeMillis())
+                .build());
+
+        subscribedChannels.add(channel);
+
+        System.out.println("[CLIENT] Inscrito no canal: " + channel);
+    }
+
+    // ===============================
+    // LAMPORT CLOCK
+    // ===============================
+
+    private static void incrementClock() {
+        logicalClock++;
+    }
+
+    private static void updateClock(int received) {
+        logicalClock = Math.max(logicalClock, received) + 1;
+    }
+
+    private static Chat.ChatRequest.Builder buildBaseRequest(String type) {
+        return Chat.ChatRequest.newBuilder()
+                .setType(type)
+                .setCount(logicalClock)
+                .setTimestamp(System.currentTimeMillis());
     }
 
     // ===============================
@@ -191,10 +224,7 @@ public class Main {
     // ===============================
 
     private static String generateBot() {
-        Faker faker = new Faker();
-        String bot = "bot_" + faker.lorem().word();
-
-        return bot;
+        return "bot_" + faker.lorem().word();
     }
 
     private static String generateChannel() {
@@ -202,13 +232,22 @@ public class Main {
     }
 
     private static String generateMessage() {
-        Faker faker = new Faker();
-        String message = "";
-        
-        for(int i = 0; i <= random.nextInt(25, 50); i++) {
-            message += " " + faker.lorem().word();
+        StringBuilder message = new StringBuilder();
+
+        int size = random.nextInt(25, 50);
+
+        for (int i = 0; i < size; i++) {
+            message.append(" ").append(faker.lorem().word());
         }
-         
-        return message;
+
+        return message.toString();
+    }
+
+    private static void sleep(int ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
     }
 }

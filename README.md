@@ -322,6 +322,82 @@ Cliente → Broker → Servidor → PubSub Proxy → Clientes inscritos
   * timestamp de envio
   * timestamp de recebimento
 
+## 🔄 Sincronização de Relógio entre Servidores
+
+Foi implementada sincronização de relógio inspirada no algoritmo de
+Berkeley.
+
+### 🔹 Funcionamento
+
+-   um servidor é eleito como coordenador
+-   os demais servidores solicitam o horário ao coordenador:
+
+```{=html}
+<!-- -->
+```
+
+    Servidor → Coordenador: GET_TIME
+    Coordenador → Servidor: timestamp
+
+-   cada servidor calcula um offset local para ajustar seu relógio
+
+### 🔹 Frequência
+
+-   a sincronização ocorre a cada 15 mensagens processadas
+
+------------------------------------------------------------------------
+
+## 🏆 Eleição de Coordenador
+
+Para suportar múltiplos servidores, foi implementado um mecanismo de
+eleição.
+
+### 🔹 Critério
+
+-   baseado no rank atribuído pelo heartbeat
+-   menor rank → maior prioridade
+
+### 🔹 Divulgação
+
+-   o coordenador publica sua identidade via Pub/Sub:
+
+```{=html}
+<!-- -->
+```
+
+    Tópico: servers
+    Mensagem: COORDINATOR:<nome>
+
+### 🔹 Tolerância a falhas
+
+-   caso o coordenador não responda:
+    -   uma nova eleição é realizada automaticamente
+
+------------------------------------------------------------------------
+
+## 🔗 Comunicação entre Servidores
+
+Foi adicionada comunicação direta entre servidores para suportar
+sincronização.
+
+### 📡 Porta interna
+
+    tcp://<server>:7000
+
+### 🔹 Uso
+
+-   requisição de tempo (`GET_TIME`)
+-   suporte à sincronização distribuída
+
+------------------------------------------------------------------------
+
+## 🧠 Consistência e Ordenação
+
+Com as melhorias implementadas, o sistema passa a garantir:
+
+-   consistência causal entre mensagens (via relógio lógico)
+-   sincronização aproximada de tempo entre servidores
+-   
 
 
 ---

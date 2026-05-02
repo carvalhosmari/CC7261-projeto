@@ -14,6 +14,8 @@ message ChatRequest {
 message ChatResponse {
   string message = 1;
   repeated string channels = 2;
+  int32 count = 3;
+  int64 timestamp = 4;
 }
 
 message HBRequest {

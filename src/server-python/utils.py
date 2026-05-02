@@ -83,3 +83,13 @@ def get_servers(socket):
     servers = res.servers
 
     return servers
+
+def elect_coordinator(servers):
+    return min(servers, key=lambda s: s.rank).server
+
+def now(offset=0):
+    dt =datetime.fromtimestamp(datetime.now().timestamp())
+
+    dt = (dt - timedelta(hours=3)) + timedelta(seconds=offset)
+
+    return str(dt)
