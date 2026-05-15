@@ -20,7 +20,7 @@ services:
     volumes:
       - ./data:/app/data
     deploy:
-      replicas: 2
+      replicas: 1
 
   client:
     build:

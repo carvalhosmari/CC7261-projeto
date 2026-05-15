@@ -1,0 +1,36 @@
+{
+  "logins": [
+    {
+      "username": "bot_minus",
+      "timestamp": "2026-05-01 23:57:48.445906"
+    }
+  ],
+  "subscriptions": {
+    "canal_36": [
+      "bot_minus"
+    ]
+  },
+  "channels": [
+    "canal_36"
+  ],
+  "messages": [
+    {
+      "channel": "canal_36",
+      "username": "bot_minus",
+      "message": " beatae voluptas esse tenetur quis molestias et enim libero quo non voluptatem eligendi modi et aut aut nostrum ducimus voluptatum excepturi nihil et quis rerum id sed officiis minus autem atque suscipit rerum cum esse at deserunt nihil earum aut",
+      "timestamp": "2026-05-01 23:57:48.474641"
+    },
+    {
+      "channel": "canal_36",
+      "username": "bot_minus",
+      "message": " optio quaerat molestiae velit dicta quaerat molestiae qui dolor assumenda qui sit et a voluptatem culpa architecto mollitia nihil consequatur debitis atque rerum veritatis et quidem quis sint quidem",
+      "timestamp": "2026-05-01 23:57:49.480604"
+    },
+    {
+      "channel": "canal_36",
+      "username": "bot_minus",
+      "message": " et qui impedit totam velit sint et voluptatem perspiciatis ratione voluptatem quibusdam enim occaecati corporis et ad aliquam necessitatibus et maiores beatae nihil aut ut dolorem corporis quo facilis vel debitis magni porro aut blanditiis",
+      "timestamp": "2026-05-01 23:57:50.485818"
+    }
+  ]
+}
