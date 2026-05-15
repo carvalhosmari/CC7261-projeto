@@ -389,18 +389,192 @@ sincronização.
 -   requisição de tempo (`GET_TIME`)
 -   suporte à sincronização distribuída
 
-------------------------------------------------------------------------
+---
 
-## 🧠 Consistência e Ordenação
+## 🔁 Replicação e Consistência dos Dados
 
-Com as melhorias implementadas, o sistema passa a garantir:
+### 📌 Problema
 
--   consistência causal entre mensagens (via relógio lógico)
--   sincronização aproximada de tempo entre servidores
--   
+Inicialmente, o sistema utilizava o broker com balanceamento de carga Round-Robin.  
+Com isso, cada servidor recebia apenas parte das mensagens trocadas pelos clientes.
 
+Exemplo:
+
+- servidor A → recebe mensagens 1, 3 e 5
+- servidor B → recebe mensagens 2, 4 e 6
+
+Esse comportamento gerava dois problemas principais:
+
+1. perda parcial do histórico caso um servidor falhasse
+2. inconsistência nos dados entre os servidores
+
+Além disso, clientes conectados a servidores diferentes poderiam visualizar históricos distintos.
 
 ---
+
+### ✅ Solução Implementada
+
+Foi implementado um mecanismo de replicação ativa entre os servidores utilizando comunicação servidor ↔ servidor via ZeroMQ.
+
+O modelo adotado foi baseado em:
+
+- replicação total (full replication)
+- consistência eventual (eventual consistency)
+
+Nesse modelo:
+
+- todos os servidores mantêm uma cópia completa dos dados
+- atualizações são propagadas para todas as réplicas
+- servidores recuperam automaticamente o estado após falhas
+
+---
+
+### 🏗️ Arquitetura da Replicação
+
+Cada servidor passou a possuir um socket interno:
+
+```python
+internal_socket = context.socket(zmq.REP)
+internal_socket.bind(f"tcp://*:{SERVER_PORT}")
+```
+
+Esse socket é utilizado exclusivamente para:
+
+- replicação de eventos
+- sincronização de estado
+- sincronização de relógio
+- comunicação interna entre servidores
+
+### 📡 Replicação de Eventos
+
+Sempre que um servidor recebe uma operação que altera o estado do sistema, ele replica essa alteração para os demais servidores ativos.
+
+Eventos replicados:
+
+LOGIN
+CREATE_CHANNEL
+SUBSCRIBE
+PUBLISH
+
+A replicação ocorre através da função:
+```python
+replicate_data(event_type, payload)
+```
+Cada réplica recebe um evento contendo:
+```json
+{
+  "event": "PUBLISH",
+  "payload": {
+    "channel": "canal_1",
+    "username": "bot_x",
+    "message": "hello",
+    "timestamp": "...",
+    "count": 42
+  }
+}
+```
+
+### 🧠 Relógio Lógico Distribuído
+
+Para manter ordenação consistente entre mensagens replicadas, foi implementado um contador lógico distribuído baseado no algoritmo de Lamport.
+
+Cada mensagem possui:
+
+- timestamp físico
+- contador lógico (count)
+
+Isso garante:
+
+- ordenação causal
+- sincronização lógica entre servidores
+- prevenção de conflitos de ordenação
+
+### 🔄 Recuperação Automática de Estado
+
+Quando um servidor reinicia após falha, ele executa sincronização automática com os demais servidores.
+
+A sincronização utiliza:
+```python
+GET_STATE
+```
+
+O servidor ativo envia todo seu estado atual:
+```json
+{
+  "logins": [],
+  "channels": [],
+  "subscriptions": {},
+  "messages": []
+}
+```
+O servidor recuperado realiza merge do estado recebido com seu estado local.
+
+### 🔀 Merge de Dados
+
+Foi implementado um mecanismo de merge incremental para:
+
+- evitar duplicatas
+- recuperar mensagens perdidas
+- consolidar estados divergentes
+
+O merge compara:
+
+- timestamp
+- username
+- conteúdo da mensagem
+- contador lógico
+
+Exemplo:
+```python
+exists = any(
+    msg["timestamp"] == message["timestamp"]
+    and msg["username"] == message["username"]
+    and msg["message"] == message["message"]
+    for msg in local_data["messages"]
+)
+```
+### ⏱️ Tolerância a Falhas
+
+Foi adicionada tolerância a falhas utilizando timeout nos sockets internos do ZeroMQ.
+
+Configuração:
+```python
+sock.setsockopt(zmq.RCVTIMEO, 2000)
+sock.setsockopt(zmq.SNDTIMEO, 2000)
+```
+
+Com isso:
+
+- servidores não travam caso outro servidor falhe
+- replicações falhas são ignoradas
+- o sistema continua funcionando normalmente
+
+### 🔁 Sincronização Contínua
+
+Foi implementada uma thread de sincronização periódica:
+```python
+sync_state_loop()
+```
+
+Essa thread:
+
+- tenta recuperar estado continuamente
+- reintegra servidores recuperados
+- garante convergência eventual dos dados
+
+### ✅ Resultado Final
+
+Com a solução implementada:
+
+- todos os servidores mantêm cópia completa dos dados
+- falhas não causam perda de histórico
+- servidores recuperam automaticamente o estado
+- clientes recebem visão consistente do sistema
+- o sistema continua operando mesmo com falha de réplicas
+
+A solução implementa uma arquitetura distribuída tolerante a falhas baseada em ***replicação ativa e consistência eventual***.
+
+--- 
 
 ## ✅ Conclusão
 
