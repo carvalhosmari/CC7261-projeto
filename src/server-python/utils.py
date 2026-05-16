@@ -95,7 +95,6 @@ def elect_coordinator(servers):
         return None
 
     ordered = sorted(servers, key=lambda s: s.rank)
-
     return ordered[0].server
 
 

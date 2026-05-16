@@ -171,6 +171,9 @@ def sync_clock():
 
         COORDINATOR = u.elect_coordinator(SERVERS)
 
+        print(f"NOVO COORDENADOR APOS NOVA ELEICAO: {COORDINATOR}")
+
+
 
 def merge_state(local_data, remote_data):
 
@@ -272,32 +275,6 @@ def sync_state():
                 remote_data
             )
 
-            local_data["messages"] = sorted(
-                local_data["messages"],
-                key=lambda x: (
-                    x["count"],
-                    x["timestamp"]
-                )
-            )
-
-            unique_messages = []
-
-            seen = set()
-
-            for msg in local_data["messages"]:
-                key = (
-                    msg["timestamp"],
-                    msg["username"],
-                    msg["message"],
-                    msg["count"]
-                )
-
-                if key not in seen:
-                    seen.add(key)
-                    unique_messages.append(msg)
-
-
-            local_data["messages"] = unique_message
             sock.close()
 
             synced = True
