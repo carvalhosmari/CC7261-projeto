@@ -1,19 +1,22 @@
-import zmq
-import chat_pb2
 import json
 import os
-from datetime import datetime, timezone, timedelta
+import time
+from datetime import datetime
+
 
 def init_data(data_file):
+    os.makedirs(os.path.dirname(data_file), exist_ok=True)
+
     if not os.path.exists(data_file):
-        os.makedirs(os.path.dirname(data_file), exist_ok=True)
-        with open(data_file, "w") as f:
-            json.dump({
-                "logins": [],
-                "subscriptions": {},
-                "channels": [],
-                "messages": []
-            }, f)
+        data = {
+            "logins": [],
+            "subscriptions": {},
+            "channels": [],
+            "messages": []
+        }
+
+        write_data(data, data_file)
+
 
 def read_data(data_file):
     try:
@@ -21,75 +24,108 @@ def read_data(data_file):
             content = f.read().strip()
 
             if not content:
-                return {"logins": [],"subscriptions": {}, "channels": [], "messages": []}
+                return {
+                    "logins": [],
+                    "subscriptions": {},
+                    "channels": [],
+                    "messages": []
+                }
 
             return json.loads(content)
 
     except Exception:
-        return {"logins": [], "subscriptions": {}, "channels": [], "messages": []}
+        return {
+            "logins": [],
+            "subscriptions": {},
+            "channels": [],
+            "messages": []
+        }
+
 
 def write_data(data, data_file):
     with open(data_file, "w") as f:
         json.dump(data, f, indent=2)
 
-def get_timestamp(socket):
-    req = chat_pb2.HBRequest()
-    req.type = "SYNC"
 
-    socket.send(req.SerializeToString())
+def now(clock_offset=0):
+    return str(datetime.fromtimestamp(
+        (time.time() * 1000 + clock_offset) / 1000
+    ))
 
-    hb_message = socket.recv()
-    res = chat_pb2.HBResponse()
-    res.ParseFromString(hb_message)
-
-    print(res.timestamp)
-
-    dt = datetime.fromtimestamp(res.timestamp/1000)
-
-    dt = dt - timedelta(hours=3)
-
-    return str(dt)
 
 def register_server(socket, server_name):
+    import chat_pb2
+
     req = chat_pb2.HBRequest()
-    
+
     req.type = "REGISTER"
     req.server = server_name
 
     socket.send(req.SerializeToString())
 
-    hb_message = socket.recv()
+    reply = socket.recv()
+
     res = chat_pb2.HBResponse()
-    res.ParseFromString(hb_message)
+    res.ParseFromString(reply)
 
-    print(res.message)
+    print(f"[HB] Rank recebido: {res.rank}", flush=True)
 
-    rank = res.rank
+    return res.rank
 
-    return rank
-    
+
 def get_servers(socket):
+    import chat_pb2
+
     req = chat_pb2.HBRequest()
-    
+
     req.type = "GET_SERVERS"
-    
+
     socket.send(req.SerializeToString())
 
-    hb_message = socket.recv()
-    res = chat_pb2.HBResponse()
-    res.ParseFromString(hb_message)
-    
-    print(res.message)
-    servers = res.servers
+    reply = socket.recv()
 
-    return servers
+    res = chat_pb2.HBResponse()
+    res.ParseFromString(reply)
+
+    return res.servers
+
 
 def elect_coordinator(servers):
-    return min(servers, key=lambda s: s.rank).server
+    if not servers:
+        return None
 
-def now(offset=0):
-    dt =datetime.fromtimestamp(datetime.now().timestamp())
+    ordered = sorted(servers, key=lambda s: s.rank)
+    return ordered[0].server
 
-    dt = (dt - timedelta(hours=3)) + timedelta(seconds=offset)
 
-    return str(dt)
+def replicate_to_servers(context, servers, current_server, req):
+    import zmq
+
+    for server in servers:
+
+        server_name = server.server
+
+        if server_name == current_server:
+            continue
+
+        try:
+            sock = context.socket(zmq.REQ)
+
+            sock.connect(f"tcp://{server_name}:7000")
+
+            sock.send(req.SerializeToString())
+
+            sock.recv()
+
+            sock.close()
+
+            print(
+                f"[REPL] Replicado para {server_name}",
+                flush=True
+            )
+
+        except Exception as e:
+            print(
+                f"[REPL] Falha ao replicar para {server_name}: {e}",
+                flush=True
+            )
